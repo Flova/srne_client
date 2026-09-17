@@ -1,0 +1,62 @@
+{
+  "config": {
+    "flow_title": "{name}",
+    "step": {
+      "bluetooth_confirm": {
+        "description": "Do you want to set up {name}?"
+      },
+      "user": {
+        "description": "Select the SRNE device to add. Make sure the phone app is closed - Bluetooth allows only one connection at a time.",
+        "data": {
+          "address": "Device"
+        }
+      }
+    },
+    "abort": {
+      "no_devices_found": "No SRNE devices found. Power the controller, close the phone app, and make sure the Home Assistant host is in Bluetooth range.",
+      "already_configured": "This device is already configured."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "data": {
+          "scan_interval": "Polling interval (seconds)"
+        }
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "battery_soc": { "name": "Battery charge" },
+      "battery_voltage": { "name": "Battery voltage" },
+      "charging_current": { "name": "Charging current" },
+      "charging_power": { "name": "Charging power" },
+      "pv_voltage": { "name": "Solar voltage" },
+      "pv_current": { "name": "Solar current" },
+      "pv_power": { "name": "Solar power" },
+      "load_voltage": { "name": "Load voltage" },
+      "load_current": { "name": "Load current" },
+      "load_power": { "name": "Load power" },
+      "controller_temperature": { "name": "Controller temperature" },
+      "battery_temperature": { "name": "Battery temperature" },
+      "charging_state": {
+        "name": "Charging state",
+        "state": {
+          "not charging": "Not charging",
+          "activated": "Activated",
+          "mppt": "MPPT",
+          "equalizing": "Equalizing",
+          "boost": "Boost",
+          "floating": "Floating",
+          "current limiting": "Current limiting"
+        }
+      }
+    },
+    "binary_sensor": {
+      "charging": { "name": "Charging" },
+      "load": { "name": "Load output" },
+      "fault": { "name": "Fault" }
+    }
+  }
+}

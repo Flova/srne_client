@@ -1,0 +1,5 @@
+# Runtime dependency for the BLE transport (Linux/BlueZ, works on Raspberry Pi).
+bleak>=0.21
+
+# Dev/test only:
+#   pytest

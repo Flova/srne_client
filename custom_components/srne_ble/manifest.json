@@ -1,0 +1,19 @@
+{
+  "domain": "srne_ble",
+  "name": "SRNE Solar Controller (BLE)",
+  "codeowners": ["@Flova"],
+  "config_flow": true,
+  "dependencies": ["bluetooth_adapters"],
+  "documentation": "https://github.com/Flova/srne_client",
+  "integration_type": "device",
+  "iot_class": "local_polling",
+  "issue_tracker": "https://github.com/Flova/srne_client/issues",
+  "bluetooth": [
+    { "local_name": "BT-*", "connectable": true },
+    { "local_name": "BAT*", "connectable": true },
+    { "local_name": "RNG*", "connectable": true },
+    { "local_name": "OCS*", "connectable": true }
+  ],
+  "requirements": ["bleak-retry-connector>=3.4.0"],
+  "version": "0.1.0"
+}
