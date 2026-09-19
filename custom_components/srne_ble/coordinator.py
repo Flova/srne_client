@@ -100,11 +100,24 @@ class SRNECoordinator(DataUpdateCoordinator[ControllerData]):
                 return self.data
             raise UpdateFailed("connection is turned off")
         try:
-            return await self._device.async_poll(self._get_ble_device())
+            ble_device = self._get_ble_device()
+            data = await self._device.async_poll(ble_device)
         except ConfigEntryNotReady as exc:
             raise UpdateFailed(str(exc)) from exc
         except SRNEConnectionError as exc:
             raise UpdateFailed(str(exc)) from exc
+
+        # After a (re)connect, read the charge switch once - it may have changed
+        # while we were disconnected (e.g. toggled from the phone app).
+        if self._device.consume_reconnected():
+            try:
+                self.charge_switch_on = await self._device.async_read_charge_switch(
+                    ble_device
+                )
+            except SRNEConnectionError as exc:
+                _LOGGER.debug("%s: charge-switch read after reconnect failed: %s",
+                              self.address, exc)
+        return data
 
     async def async_refresh_charge_switch(self) -> None:
         """Read the charge/discharge switch state on demand (not during polling)."""

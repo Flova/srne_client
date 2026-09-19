@@ -69,10 +69,10 @@ is deliberately narrow:
   must match. If either check fails, Home Assistant surfaces an error and the
   switch keeps its previous state.
 
-The switch state is read **on load and after each toggle** — not during the
-background poll — so polling stays lightweight. It therefore also reflects a
-change you make from the phone app the next time the integration reads it
-(on reload, or after you toggle the switch).
+The switch state is read **on load, after each (re)connect, and after each
+toggle** — not during the steady background poll — so polling stays lightweight
+while still catching a change you make from the phone app (it is re-read the
+next time Home Assistant reconnects to the controller).
 
 ## Bluetooth connection & using the phone app
 

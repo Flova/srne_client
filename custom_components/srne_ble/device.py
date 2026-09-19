@@ -52,10 +52,18 @@ class SRNEBleDevice:
         self._buffer = bytearray()
         self._expected_len = 0
         self._response: "Optional[asyncio.Future[bytes]]" = None
+        # Set whenever a fresh connection is established; consumed by the
+        # coordinator to re-read state that may have changed while disconnected.
+        self._reconnected = False
 
     @property
     def connected(self) -> bool:
         return self._client is not None and self._client.is_connected
+
+    def consume_reconnected(self) -> bool:
+        """Return True once after each fresh connection, then clear the flag."""
+        reconnected, self._reconnected = self._reconnected, False
+        return reconnected
 
     async def _ensure_connected(self, ble_device: BLEDevice) -> BleakClientWithServiceCache:
         if self._client is not None and self._client.is_connected:
@@ -74,6 +82,7 @@ class SRNEBleDevice:
         self._verify_notify_char(client)
         await client.start_notify(NOTIFY_CHAR_UUID, self._on_notify)
         self._client = client
+        self._reconnected = True
         _LOGGER.debug("%s: connected", self._name)
         return client
 
