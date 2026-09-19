@@ -157,3 +157,7 @@ Natural next steps:
 Interoperability tooling for talking to your own SRNE device. Not affiliated
 with SRNE. Validate the first live read with `--raw` before trusting derived
 values.
+
+## License
+
+[MIT](LICENSE).
