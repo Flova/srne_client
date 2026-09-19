@@ -8,7 +8,11 @@ from datetime import timedelta
 from homeassistant.components import bluetooth
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import ConfigEntryError, ConfigEntryNotReady
+from homeassistant.exceptions import (
+    ConfigEntryError,
+    ConfigEntryNotReady,
+    HomeAssistantError,
+)
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .const import DOMAIN
@@ -40,6 +44,8 @@ class SRNECoordinator(DataUpdateCoordinator[ControllerData]):
         )
         self.address = address
         self.identity: DeviceIdentity | None = None
+        # Last known charge/discharge switch state (None until first read).
+        self.charge_switch_on: bool | None = None
         self._device = SRNEBleDevice(name=entry.title or address)
 
     def _get_ble_device(self):
@@ -84,11 +90,28 @@ class SRNECoordinator(DataUpdateCoordinator[ControllerData]):
 
     async def _async_update_data(self) -> ControllerData:
         try:
-            return await self._device.async_poll(self._get_ble_device())
+            data, charge_on = await self._device.async_poll(self._get_ble_device())
         except ConfigEntryNotReady as exc:
             raise UpdateFailed(str(exc)) from exc
         except SRNEConnectionError as exc:
             raise UpdateFailed(str(exc)) from exc
+        if charge_on is not None:
+            self.charge_switch_on = charge_on
+        return data
+
+    async def async_set_charge_switch(self, on: bool) -> None:
+        """Turn charging on/off, confirm it, and refresh state.
+
+        Raises on failure so Home Assistant surfaces it to the user instead of
+        silently showing the wrong state.
+        """
+        try:
+            self.charge_switch_on = await self._device.async_set_charge_switch(
+                self._get_ble_device(), on
+            )
+        except (SRNEConnectionError, ConfigEntryNotReady) as exc:
+            raise HomeAssistantError(f"Failed to set charging {'on' if on else 'off'}: {exc}") from exc
+        self.async_update_listeners()
 
     async def async_shutdown(self) -> None:
         await super().async_shutdown()

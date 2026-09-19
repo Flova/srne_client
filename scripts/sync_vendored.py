@@ -17,7 +17,7 @@ import sys
 from pathlib import Path
 
 # Modules that are safe to vendor (no bleak / no Home Assistant imports).
-VENDORED_MODULES = ("crc.py", "protocol.py", "controller.py", "discovery.py", "identify.py")
+VENDORED_MODULES = ("crc.py", "protocol.py", "controller.py", "discovery.py", "identify.py", "charge.py")
 
 ROOT = Path(__file__).resolve().parent.parent
 SRC = ROOT / "srne_ble"

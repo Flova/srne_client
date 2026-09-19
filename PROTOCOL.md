@@ -113,6 +113,21 @@ table is in `srne_ble/controller.py` (`FAULT_BITS`) — e.g. bit 30 = "charging
 MOS short circuit", bit 20 = "load overcurrent", bit 16 = "battery
 over-discharge".
 
+## Control: charge/discharge switch (write)
+
+The charge/discharge switch is the one writable control implemented. It uses
+Modbus function `0x06` (write single register) on register `0xDF00`:
+
+```
+FF06 DF00 0001  + CRC   -> charging enabled (on)
+FF06 DF00 0000  + CRC   -> charging disabled (off)
+```
+
+The switch state is read with `FF03 DF00 0001` (0 = off, non-zero = on). A write
+is confirmed two ways before it is reported as successful: the device echoes the
+register + value it accepted, and the register is read back and must match the
+requested state. No other register is ever written (see `srne_ble/charge.py`).
+
 ## Other commands (not yet implemented)
 
 For future expansion (history / totals / parameter writes):

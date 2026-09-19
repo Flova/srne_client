@@ -50,9 +50,33 @@ The polling interval defaults to 30 s and can be changed in the integration's
 | Controller temperature (°C) | 0x0103 hi | |
 | Battery temperature (°C) | 0x0103 lo | |
 | Charging state | 0x0120 | enum: not charging / mppt / boost / … |
-| Charging (binary) | derived | on when charging |
+| Charging active (binary) | derived | on when actively charging |
 | Load output (binary) | 0x010A | |
 | Fault (binary, problem) | 0x0121/0x0122 | `faults` attribute lists active faults |
+| **Charging (switch)** | 0xDF00 | write control — see below |
+
+## Charging switch (write control)
+
+The **Charging** switch turns the controller's charge/discharge switch on and
+off (register `0xDF00`). This is the only write the integration performs, and it
+is deliberately narrow:
+
+- It writes *only* register `0xDF00` with value `1` (on) or `0` (off) — no other
+  register can be written.
+- Every change is confirmed twice before the switch reports success: the
+  device's write acknowledgement is checked, and the register is read back and
+  must match. If either check fails, Home Assistant surfaces an error and the
+  switch keeps its previous state.
+
+The switch state is also read on every poll, so it reflects changes made from
+the phone app too.
+
+## Bluetooth connection & using the phone app
+
+The integration connects only for each poll (and each switch change) and
+disconnects immediately afterwards. BLE allows a single connection at a time, so
+this leaves the controller free between polls for the phone app to connect.
+Disabling the integration releases it entirely.
 
 ## Troubleshooting
 

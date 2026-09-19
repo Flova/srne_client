@@ -92,6 +92,22 @@ async def cmd_gatt(args: argparse.Namespace) -> int:
     return 0
 
 
+async def cmd_charge(args: argparse.Namespace) -> int:
+    """Read, or explicitly set, the charge/discharge switch (register 0xDF00)."""
+    from srne_ble.client import SRNEBLEClient
+
+    async with SRNEBLEClient(args.address) as client:
+        if args.state is None:
+            state = await client.read_charge_switch()
+            print(f"Charging switch: {'ON' if state else 'OFF'}")
+            return 0
+        on = args.state == "on"
+        print(f"Setting charging {'ON' if on else 'OFF'} ...")
+        new = await client.set_charge_switch(on)
+        print(f"Confirmed: charging switch is now {'ON' if new else 'OFF'}")
+    return 0
+
+
 async def cmd_poll(args: argparse.Namespace) -> int:
     from srne_ble.client import SRNEBLEClient
 
@@ -134,6 +150,13 @@ def build_parser() -> argparse.ArgumentParser:
                        help="dump the device's BLE services/characteristics")
     g.add_argument("--address", required=True)
     g.set_defaults(func=cmd_gatt)
+
+    c = sub.add_parser("charge", parents=[common],
+                       help="read or set the charge/discharge switch")
+    c.add_argument("--address", required=True)
+    c.add_argument("--state", choices=["on", "off"], default=None,
+                   help="turn charging on/off (omit to just read the current state)")
+    c.set_defaults(func=cmd_charge)
 
     pl = sub.add_parser("poll", parents=[common], help="continuously read live data")
     pl.add_argument("--address", required=True)

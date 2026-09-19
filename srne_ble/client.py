@@ -24,6 +24,12 @@ from bleak import BleakClient, BleakScanner
 from bleak.backends.device import BLEDevice
 
 from . import protocol
+from .charge import (
+    charge_switch_command,
+    charge_switch_read_command,
+    is_write_ack,
+    parse_charge_switch,
+)
 from .controller import ControllerData, parse_realtime, realtime_request
 from .discovery import DiscoveredDevice, identify, name_matches
 from .identify import DeviceIdentity, read_identity
@@ -146,3 +152,25 @@ class SRNEBLEClient:
         """Poll and decode the controller real-time data block."""
         frame = await self.request(realtime_request())
         return parse_realtime(frame)
+
+    async def read_charge_switch(self) -> bool:
+        """Read the charge/discharge switch state (True = charging enabled)."""
+        return parse_charge_switch(await self.request(charge_switch_read_command()))
+
+    async def set_charge_switch(self, on: bool) -> bool:
+        """Turn charging on/off (register 0xDF00) and confirm the result.
+
+        Verifies the device's write acknowledgement and reads the register back;
+        raises :class:`SRNEError` unless the device confirms the requested state.
+        """
+        command = charge_switch_command(on)
+        ack = await self.request(command)
+        if not is_write_ack(ack, command):
+            raise SRNEError(f"charge-switch write not acknowledged: {ack.hex()}")
+        state = await self.read_charge_switch()
+        if state != on:
+            raise SRNEError(
+                f"charge switch did not change (requested {'on' if on else 'off'}, "
+                f"reads {'on' if state else 'off'})"
+            )
+        return state

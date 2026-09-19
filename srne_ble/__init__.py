@@ -3,6 +3,11 @@
 See ``PROTOCOL.md`` for the protocol specification.
 """
 
+from .charge import (
+    charge_switch_command,
+    charge_switch_read_command,
+    parse_charge_switch,
+)
 from .controller import ControllerData, parse_realtime, realtime_request
 from .discovery import (
     DEFAULT_FILTER_LIST,
@@ -35,6 +40,9 @@ __all__ = [
     "DEVICE_TYPE_NAMES",
     "build_read_holding",
     "build_write_single",
+    "charge_switch_command",
+    "charge_switch_read_command",
+    "parse_charge_switch",
     "WRITE_SERVICE_UUID",
     "WRITE_CHAR_UUID",
     "NOTIFY_SERVICE_UUID",

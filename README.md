@@ -73,6 +73,10 @@ python3 mvp.py poll --address AA:BB:CC:DD:EE:FF --interval 5
 
 # 4. First-connection sanity check — dump every raw register too
 python3 mvp.py read --address AA:BB:CC:DD:EE:FF --raw
+
+# 5. Read the charge/discharge switch (or set it explicitly)
+python3 mvp.py charge --address AA:BB:CC:DD:EE:FF               # read state
+python3 mvp.py charge --address AA:BB:CC:DD:EE:FF --state off   # turn charging off
 ```
 
 Example output:
@@ -143,7 +147,8 @@ Natural next steps:
 
 1. History & cumulative-total registers (commands listed in `PROTOCOL.md`) —
    enables the HA energy dashboard (cumulative kWh).
-2. Parameter reads/writes (load switch, charge settings) via function `0x06`.
+2. More parameter reads/writes (load switch, charge settings) via function
+   `0x06`. The charge/discharge switch is already implemented.
 3. Support other device families (inverters, BMS) — same transport, different
    command tables.
 
