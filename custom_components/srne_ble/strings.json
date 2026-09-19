@@ -59,7 +59,8 @@
       "fault": { "name": "Fault" }
     },
     "switch": {
-      "charging": { "name": "Charging" }
+      "charging": { "name": "Charging" },
+      "connection": { "name": "Connection" }
     }
   }
 }

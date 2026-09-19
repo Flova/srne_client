@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import Optional, Tuple
+from typing import Optional
 
 from bleak.backends.device import BLEDevice
 from bleak_retry_connector import BleakClientWithServiceCache, establish_connection
@@ -35,13 +35,14 @@ class SRNEConnectionError(Exception):
 
 
 class SRNEBleDevice:
-    """Talks to one SRNE controller, connecting per operation.
+    """Talks to one SRNE controller over a persistent BLE connection.
 
-    The connection is opened for each poll/read/write and closed immediately
-    after (see ``async_poll`` / ``async_identify``). BLE allows only one central
-    connection at a time, so releasing between operations lets the phone app (or
-    any other client) connect in the gaps instead of being locked out for as
-    long as Home Assistant is running.
+    The connection is opened on first use and kept open across polls (a
+    reconnect happens only if it drops or a request fails), which avoids the
+    latency of connecting on every poll - important with several devices or a
+    fast polling rate. BLE allows only one central connection at a time, so to
+    let the phone app connect, call :meth:`async_disconnect` (the integration
+    exposes this as an explicit control).
     """
 
     def __init__(self, name: str) -> None:
@@ -56,11 +57,19 @@ class SRNEBleDevice:
     def connected(self) -> bool:
         return self._client is not None and self._client.is_connected
 
-    async def _connect(self, ble_device: BLEDevice) -> BleakClientWithServiceCache:
+    async def _ensure_connected(self, ble_device: BLEDevice) -> BleakClientWithServiceCache:
+        if self._client is not None and self._client.is_connected:
+            return self._client
+
+        def _on_disconnect(_client: BleakClientWithServiceCache) -> None:
+            _LOGGER.debug("%s: disconnected", self._name)
+            self._client = None
+
         client = await establish_connection(
             BleakClientWithServiceCache,
             ble_device,
             self._name,
+            disconnected_callback=_on_disconnect,
         )
         self._verify_notify_char(client)
         await client.start_notify(NOTIFY_CHAR_UUID, self._on_notify)
@@ -117,7 +126,7 @@ class SRNEBleDevice:
         """Read and decode the device's identity (type/model/version)."""
         async with self._lock:
             try:
-                client = await self._connect(ble_device)
+                client = await self._ensure_connected(ble_device)
 
                 async def _req(cmd: bytes) -> bytes:
                     return await self._request(client, cmd)
@@ -126,37 +135,35 @@ class SRNEBleDevice:
             except SRNEConnectionError:
                 raise
             except Exception as exc:  # noqa: BLE001 - normalise transport errors
-                raise SRNEConnectionError(str(exc)) from exc
-            finally:
                 await self.async_disconnect()
+                raise SRNEConnectionError(str(exc)) from exc
 
-    async def async_poll(
-        self, ble_device: BLEDevice
-    ) -> Tuple[ControllerData, Optional[bool]]:
-        """Read the real-time block and charge-switch state in one connection.
-
-        Returns ``(ControllerData, charge_switch_on)``. The charge-switch read is
-        best-effort: on failure it returns ``None`` for that value rather than
-        failing the whole poll.
-        """
+    async def async_poll(self, ble_device: BLEDevice) -> ControllerData:
+        """Read and decode the real-time block (charge-switch state is not read here)."""
         async with self._lock:
             try:
-                client = await self._connect(ble_device)
-                data = parse_realtime(await self._request(client, realtime_request()))
-                charge_on: Optional[bool] = None
-                try:
-                    charge_on = parse_charge_switch(
-                        await self._request(client, charge_switch_read_command())
-                    )
-                except Exception as exc:  # noqa: BLE001 - optional value
-                    _LOGGER.debug("%s: charge-switch read failed: %s", self._name, exc)
-                return data, charge_on
+                client = await self._ensure_connected(ble_device)
+                return parse_realtime(await self._request(client, realtime_request()))
             except SRNEConnectionError:
                 raise
             except Exception as exc:  # noqa: BLE001 - normalise transport errors
-                raise SRNEConnectionError(str(exc)) from exc
-            finally:
+                # Drop the client so the next poll reconnects cleanly.
                 await self.async_disconnect()
+                raise SRNEConnectionError(str(exc)) from exc
+
+    async def async_read_charge_switch(self, ble_device: BLEDevice) -> bool:
+        """Read the charge/discharge switch state (True = charging enabled)."""
+        async with self._lock:
+            try:
+                client = await self._ensure_connected(ble_device)
+                return parse_charge_switch(
+                    await self._request(client, charge_switch_read_command())
+                )
+            except SRNEConnectionError:
+                raise
+            except Exception as exc:  # noqa: BLE001 - normalise transport errors
+                await self.async_disconnect()
+                raise SRNEConnectionError(str(exc)) from exc
 
     async def async_set_charge_switch(self, ble_device: BLEDevice, on: bool) -> bool:
         """Enable/disable charging (register 0xDF00) and confirm the result.
@@ -169,7 +176,7 @@ class SRNEBleDevice:
         command = charge_switch_command(on)
         async with self._lock:
             try:
-                client = await self._connect(ble_device)
+                client = await self._ensure_connected(ble_device)
                 ack = await self._request(client, command)
                 if not is_write_ack(ack, command):
                     raise SRNEConnectionError(
@@ -189,9 +196,8 @@ class SRNEBleDevice:
             except SRNEConnectionError:
                 raise
             except Exception as exc:  # noqa: BLE001 - normalise transport errors
-                raise SRNEConnectionError(str(exc)) from exc
-            finally:
                 await self.async_disconnect()
+                raise SRNEConnectionError(str(exc)) from exc
 
     async def async_disconnect(self) -> None:
         """Release the BLE connection so other clients (e.g. the phone app) can use it."""

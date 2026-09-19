@@ -54,6 +54,7 @@ The polling interval defaults to 30 s and can be changed in the integration's
 | Load output (binary) | 0x010A | |
 | Fault (binary, problem) | 0x0121/0x0122 | `faults` attribute lists active faults |
 | **Charging (switch)** | 0xDF00 | write control — see below |
+| **Connection (switch)** | — | release/hold the BLE link — see below |
 
 ## Charging switch (write control)
 
@@ -68,15 +69,21 @@ is deliberately narrow:
   must match. If either check fails, Home Assistant surfaces an error and the
   switch keeps its previous state.
 
-The switch state is also read on every poll, so it reflects changes made from
-the phone app too.
+The switch state is read **on load and after each toggle** — not during the
+background poll — so polling stays lightweight. It therefore also reflects a
+change you make from the phone app the next time the integration reads it
+(on reload, or after you toggle the switch).
 
 ## Bluetooth connection & using the phone app
 
-The integration connects only for each poll (and each switch change) and
-disconnects immediately afterwards. BLE allows a single connection at a time, so
-this leaves the controller free between polls for the phone app to connect.
-Disabling the integration releases it entirely.
+The integration keeps a **persistent** BLE connection and reuses it across polls
+(no reconnect each cycle), which stays fast with several devices or a high
+polling rate.
+
+BLE allows only one connection at a time, so to use the phone app, turn the
+**Connection** switch **off**: Home Assistant disconnects and pauses polling,
+freeing the controller. Turn it back **on** to reconnect and resume. (Disabling
+the whole integration also releases the device.)
 
 ## Troubleshooting
 

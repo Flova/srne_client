@@ -44,8 +44,12 @@ class SRNECoordinator(DataUpdateCoordinator[ControllerData]):
         )
         self.address = address
         self.identity: DeviceIdentity | None = None
-        # Last known charge/discharge switch state (None until first read).
+        # Last known charge/discharge switch state (None until first read). It is
+        # read on demand (setup / after a toggle), never in the background poll.
         self.charge_switch_on: bool | None = None
+        # When False, the integration has released the BLE connection so the
+        # phone app can use it; polling is paused until it is turned back on.
+        self.connection_enabled: bool = True
         self._device = SRNEBleDevice(name=entry.title or address)
 
     def _get_ble_device(self):
@@ -89,15 +93,31 @@ class SRNECoordinator(DataUpdateCoordinator[ControllerData]):
         )
 
     async def _async_update_data(self) -> ControllerData:
+        # While the connection is released (for phone-app use), don't touch the
+        # radio; keep the last known data so entities aren't torn down.
+        if not self.connection_enabled:
+            if self.data is not None:
+                return self.data
+            raise UpdateFailed("connection is turned off")
         try:
-            data, charge_on = await self._device.async_poll(self._get_ble_device())
+            return await self._device.async_poll(self._get_ble_device())
         except ConfigEntryNotReady as exc:
             raise UpdateFailed(str(exc)) from exc
         except SRNEConnectionError as exc:
             raise UpdateFailed(str(exc)) from exc
-        if charge_on is not None:
-            self.charge_switch_on = charge_on
-        return data
+
+    async def async_refresh_charge_switch(self) -> None:
+        """Read the charge/discharge switch state on demand (not during polling)."""
+        if not self.connection_enabled:
+            return
+        try:
+            self.charge_switch_on = await self._device.async_read_charge_switch(
+                self._get_ble_device()
+            )
+        except (SRNEConnectionError, ConfigEntryNotReady) as exc:
+            _LOGGER.debug("%s: charge-switch read failed: %s", self.address, exc)
+            return
+        self.async_update_listeners()
 
     async def async_set_charge_switch(self, on: bool) -> None:
         """Turn charging on/off, confirm it, and refresh state.
@@ -105,12 +125,29 @@ class SRNECoordinator(DataUpdateCoordinator[ControllerData]):
         Raises on failure so Home Assistant surfaces it to the user instead of
         silently showing the wrong state.
         """
+        if not self.connection_enabled:
+            raise HomeAssistantError(
+                "The Bluetooth connection is turned off; turn it on before changing charging."
+            )
         try:
             self.charge_switch_on = await self._device.async_set_charge_switch(
                 self._get_ble_device(), on
             )
         except (SRNEConnectionError, ConfigEntryNotReady) as exc:
             raise HomeAssistantError(f"Failed to set charging {'on' if on else 'off'}: {exc}") from exc
+        self.async_update_listeners()
+
+    async def async_set_connection(self, enabled: bool) -> None:
+        """Turn HA's BLE connection on or off.
+
+        Turning it off disconnects and pauses polling so the phone app (or any
+        other client) can connect. Turning it on reconnects and resumes.
+        """
+        self.connection_enabled = enabled
+        if enabled:
+            await self.async_request_refresh()
+        else:
+            await self._device.async_disconnect()
         self.async_update_listeners()
 
     async def async_shutdown(self) -> None:
